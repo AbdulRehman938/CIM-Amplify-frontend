@@ -49,23 +49,10 @@ const SellerSchema = Yup.object().shape({
     .required("Website is required"),
   industry: Yup.string().required("Industry is required"),
   geography: Yup.string().required("Geography is required"),
-  minRevenue: Yup.number()
-    .nullable(true)
-    .transform(value => (isNaN(value) || value === null || value === '' ? null : value))
-    .positive("Min revenue must be positive"),
-  maxRevenue: Yup.number()
-    .nullable(true)
-    .transform(value => (isNaN(value) || value === null || value === '' ? null : value))
-    .positive("Max revenue must be positive")
-    .when(
-      "minRevenue",
-      (minRevenue, schema) => {
-        if (minRevenue !== null) {
-          return schema.min(minRevenue, "Max revenue must be greater than or equal to min revenue");
-        }
-        return schema;
-      }
-    ),
+  annualRevenue: Yup.number()
+    .required("Annual revenue is required")
+    .positive("Annual revenue must be positive"),
+
   currency: Yup.string().required("Currency is required"),
   description: Yup.string()
     .min(10, "Description must be at least 10 characters")
@@ -246,29 +233,9 @@ const SellerForm = () => {
   const [showLoader, setShowLoader] = useState(false);
   const [emailVerified, setEmailVerified] = useState(null);
 
-  // Initialize profile from localStorage (iterable)
-  const getProfileData = () => {
-    const storedUser = localStorage.getItem("user");
-    if (!storedUser) return {};
-    try {
-      const parsedUser = JSON.parse(storedUser);
-      // List of form fields to autofill from user object
-      const autofillFields = ["fullName", "email", "companyName", "phone", "website", "industry", "geography", "minRevenue", "maxRevenue", "currency", "description"];
-      const profile = {};
-      autofillFields.forEach(key => {
-        if (parsedUser[key] !== undefined) profile[key] = parsedUser[key];
-        // Special mapping for fullName from name
-        if (key === "fullName" && parsedUser.name) profile.fullName = parsedUser.name;
-        if (key === "email" && parsedUser.email) profile.email = parsedUser.email;
-      });
-      return profile;
-    } catch (err) {
-      console.error("Error parsing user from localStorage:", err);
-      return {};
-    }
-  };
+  // Fetch profile from backend
+  const [profileData, setProfileData] = useState(null);
 
-  const [profile] = useState(getProfileData());
 
 
   // ✅ Show popup then loader then main form
@@ -285,65 +252,46 @@ const SellerForm = () => {
   const [emailError, setEmailError] = useState(null);
 
   useEffect(() => {
-    const checkProfile = async () => {
+    const fetchProfile = async () => {
       try {
-        // ✅ Step 1: Extract token from URL
-        const params = new URLSearchParams(location.search);
-        const token = params.get("token");
+        const token = localStorage.getItem("access_token");
+        if (!token) return;
 
-        if (token) {
-          sessionStorage.setItem("verificationToken", token);
-          console.log("Verification token saved:", token);
-        }
-
-        // ✅ Step 2: Fetch profile
         const res = await axios.get(
-          "https://advisor-seller-backend.vercel.app/api/auth/profile",
-          { withCredentials: true } // if cookies are used
+          "https://advisor-seller-backend.vercel.app/api/sellers/profile",
+          { headers: { Authorization: `Bearer ${token}` } }
         );
 
         if (res.status === 200) {
-          const { role, isEmailVerified } = res.data;
-
-          // ✅ Step 3: Check verification
-          if (!isEmailVerified) {
-            toast.error("Please verify your email before proceeding ❌");
-            return;
-          }
-
-          // ✅ Step 4: Redirect based on role
-          if (role === "seller") {
-            navigate("/verify-email");
-          } else {
-            navigate("/advisorpayments");
-          }
+          setProfileData(res.data);
         } else {
-          toast.error("Failed to fetch profile ❌");
+          console.error("Failed to fetch seller profile", res.data);
         }
-      } catch (error) {
-        console.error("Error fetching profile:", error);
-        toast.error("Something went wrong while checking profile ❌");
+      } catch (err) {
+        console.error("Error fetching seller profile", err);
       }
     };
 
-    checkProfile();
-  }, [navigate, location.search]);
+    fetchProfile();
+  }, []);
 
 
-  // ------------------- Formik Initial Values -------------------
+
+
+
   const initialValues = {
-    fullName: profile.fullName || "",
-    email: profile.email || "",
-    companyName: "",
-    phone: "",
-    website: "",
-    industry: "",
-    geography: "",
-    minRevenue: "",
-    maxRevenue: "",
-    currency: "USD",
-    description: "",
+    fullName: profileData?.fullName || "",
+    email: profileData?.email || "",
+    companyName: profileData?.companyName || "",
+    phone: profileData?.phone || "",
+    website: profileData?.website || "",
+    industry: profileData?.industry || "",
+    geography: profileData?.geography || "",
+    annualRevenue: profileData?.annualRevenue || "",
+    currency: profileData?.currency || "USD",
+    description: profileData?.description || "",
   };
+
 
 
   // ------------------- Submit Handler -------------------
@@ -360,12 +308,13 @@ const SellerForm = () => {
         companyName: values.companyName,
         phone: values.phone,
         website: values.website,
-        industry: values.industry,
-        geography: values.geography,
-        annualRevenue: values.maxRevenue,
+        industry: mapIndustry(values.industry),   // map to top-level label
+        geography: mapGeography(values.geography), // map to top-level label
+        annualRevenue: Number(values.annualRevenue), // ensure it's a number
         currency: values.currency,
         description: values.description,
       };
+
 
       const res = await axios.post(
         "https://advisor-seller-backend.vercel.app/api/sellers/profile",
@@ -387,6 +336,15 @@ const SellerForm = () => {
       setSubmitting(false);
     }
   };
+
+  if (!profileData) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-primary/10 px-4 relative">
@@ -520,23 +478,10 @@ const SellerForm = () => {
                       </Field>
                     </div>
                   </div>
-                  <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                    {/* Min Revenue Field */}
-                    <AnimatedInput name="minRevenue" type="number" placeholder="Min" prefix="$" />
-                    {/* Max Revenue Field */}
-                    <AnimatedInput name="maxRevenue" type="number" placeholder="Max" prefix="$" />
+                  <div className="w-full">
+                    <AnimatedInput name="annualRevenue" type="number" placeholder="Annual Revenue" prefix="$" />
                   </div>
-                  {/* 🆕 Moved general revenue errors here */}
-                  <ErrorMessage
-                    name="minRevenue"
-                    component="p"
-                    className="text-red-500 text-sm mt-1"
-                  />
-                  <ErrorMessage
-                    name="maxRevenue"
-                    component="p"
-                    className="text-red-500 text-sm mt-1"
-                  />
+
                 </div>
 
                 {/* Industry & Geography filters */}
