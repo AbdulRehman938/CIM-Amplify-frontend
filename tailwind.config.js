@@ -1,5 +1,8 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  server: {
+    port: 5174,
+  },
   content: ["./src/**/*.{js,jsx,ts,tsx,html}"],
   theme: {
     extend: {
