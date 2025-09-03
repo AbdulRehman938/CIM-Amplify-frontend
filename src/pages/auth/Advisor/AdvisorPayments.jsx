@@ -70,7 +70,7 @@ const formatExpiry = (value) => {
 };
 
 const formatCVV = (value) => value.replace(/\D/g, "").slice(0, 4);
-const [paymentMethodId, setPaymentMethodId] = useState(null);
+
 
 
 // normalize to standard format
@@ -83,9 +83,9 @@ const normalizeIntentId = (id) => {
 
 const AdvisorPayments = () => {
   const [amount, setAmount] = useState(5000);
-  const [paymentIntentId, setPaymentIntentId] = useState(null);
   const [couponApplied, setCouponApplied] = useState(false);
-
+  const [paymentMethodId, setPaymentMethodId] = useState(null);
+  const [paymentIntentId, setPaymentIntentId] = useState(null);
   const handleApplyCoupon = async (coupon) => {
     try {
       const token = localStorage.getItem("access_token");
