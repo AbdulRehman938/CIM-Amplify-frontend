@@ -230,9 +230,40 @@ const SellerDashboard = () => {
     const [matchesLoading, setMatchesLoading] = useState(false);
     const [sortBy, setSortBy] = useState("newest");
     const [profileRefreshTrigger, setProfileRefreshTrigger] = useState(0);
+    const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [userProfile, setUserProfile] = useState({ name: "", email: "", password: "" });
+
 
     // Fetch core profile fields (name, email) from API, merge with localStorage for other fields (not name/email)
     const [profile, setProfile] = useState({});
+
+    useEffect(() => {
+        const fetchUserProfile = async () => {
+            try {
+                const token = localStorage.getItem("access_token");
+                if (!token) return;
+
+                const res = await axios.get(
+                    "https://advisor-seller-backend.vercel.app/api/auth/profile",
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+
+                if (res.status === 200 && res.data) {
+                    // Only keep name and email, ignore password
+                    setUserProfile({
+                        name: res.data.name,
+                        email: res.data.email
+                    });
+                }
+            } catch (err) {
+                console.error("Failed to fetch user profile:", err);
+            }
+        };
+        fetchUserProfile();
+    }, []);
+
+
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -264,8 +295,7 @@ const SellerDashboard = () => {
                             website: parsedUser.website,
                             industry: parsedUser.industry,
                             geography: parsedUser.geography,
-                            minRevenue: parsedUser.minRevenue,
-                            maxRevenue: parsedUser.maxRevenue || parsedUser.annualRevenue,
+                            annualRevenue: profile.annualRevenue || seller?.annualRevenue || "",
                             currency: parsedUser.currency,
                             description: parsedUser.description,
                         };
@@ -389,25 +419,14 @@ const SellerDashboard = () => {
         geography: Yup.string()
             .min(1, "Please select a geography")
             .required("Geography selection is required"),
-        minRevenue: Yup.number()
+        annualRevenue: Yup.number()
             .nullable()
             .transform(value => (isNaN(value) || value === null || value === '' ? null : value))
-            .min(1000, "Minimum revenue must be at least $1,000")
-            .max(999999999, "Minimum revenue is too large")
-            .typeError("Minimum revenue must be a valid number"),
-        maxRevenue: Yup.number()
-            .nullable()
-            .transform(value => (isNaN(value) || value === null || value === '' ? null : value))
-            .min(1000, "Maximum revenue must be at least $1,000")
-            .max(999999999, "Maximum revenue is too large")
-            .when("minRevenue", (minRevenue, schema) => {
-                if (minRevenue !== null && minRevenue !== undefined) {
-                    return schema.min(minRevenue, "Maximum revenue must be greater than or equal to minimum revenue");
-                }
-                return schema;
-            })
-            .required("Maximum revenue is required")
-            .typeError("Maximum revenue must be a valid number"),
+            .min(1000, "Annual revenue must be at least $1,000")
+            .max(999999999, "Annual revenue is too large")
+            .required("Annual revenue is required")
+            .typeError("Annual revenue must be a valid number"),
+
         currency: Yup.string()
             .oneOf(["USD", "PKR", "EUR", "GBP"], "Please select a valid currency")
             .required("Currency selection is required"),
@@ -428,13 +447,12 @@ const SellerDashboard = () => {
             }
 
             const payload = {
-                // fullName: values.fullName,
                 companyName: values.companyName,
                 phone: values.phone,
                 website: values.website,
                 industry: values.industry,
                 geography: values.geography,
-                annualRevenue: values.maxRevenue,
+                annualRevenue: values.annualRevenue,
                 currency: values.currency,
                 description: values.description,
             };
@@ -461,11 +479,11 @@ const SellerDashboard = () => {
                         website: values.website,
                         industry: values.industry,
                         geography: values.geography,
-                        annualRevenue: values.maxRevenue,
-                        maxRevenue: values.maxRevenue,
+                        annualRevenue: values.annualRevenue,
                         currency: values.currency,
                         description: values.description,
                     };
+
                     localStorage.setItem("user", JSON.stringify(updatedUser));
                 }
 
@@ -543,8 +561,8 @@ const SellerDashboard = () => {
         website: profile.website || seller?.website || "",
         industry: profile.industry || seller?.industry || "",
         geography: profile.geography || seller?.geography || "",
-        minRevenue: profile.minRevenue || "",
-        maxRevenue: profile.maxRevenue || seller?.annualRevenue || "",
+        annualRevenue: profile.annualRevenue || seller?.annualRevenue || "",
+
         currency: profile.currency || seller?.currency || "USD",
         description: profile.description || seller?.description || "",
     };
@@ -593,14 +611,61 @@ const SellerDashboard = () => {
                             className="w-full px-4 py-2 border rounded-lg focus:outline-none bg-gray-100"
                         />
                     </div>
-                    <div className="flex items-center gap-3">
-                        <span className="font-medium">
-                            {profile.name || "Loading..."}
-                        </span>
-                        <div className="w-10 h-10 flex items-center justify-center bg-gray-200 rounded-full">
-                            {(profile.name || "A").charAt(0)}
-                        </div>
+                    <div className="relative">
+                        <button
+                            className="flex items-center gap-2"
+                            onClick={() => setProfileDropdownOpen(prev => !prev)}
+                        >
+                            <span className="font-medium">{userProfile.name || "Loading..."}</span>
+                            <div className="w-10 h-10 flex items-center justify-center bg-gray-200 rounded-full">
+                                {(userProfile.name || "A").charAt(0)}
+                            </div>
+                        </button>
+
+                        {profileDropdownOpen && (
+                            <div className="absolute right-0 mt-2 w-64 bg-white border rounded-xl shadow-lg p-4 z-50">
+                                <div className="flex flex-col gap-3">
+                                    <div>
+                                        <label className="text-sm text-gray-500">Name</label>
+                                        <input
+                                            type="text"
+                                            value={userProfile.name}
+                                            readOnly
+                                            className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm text-gray-500">Email</label>
+                                        <input
+                                            type="email"
+                                            value={userProfile.email}
+                                            readOnly
+                                            className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-sm text-gray-500">Password</label>
+                                        <div className="relative">
+                                            <input
+                                                type={showPassword ? "text" : "password"}
+                                                value={userProfile.password}
+                                                readOnly
+                                                className="w-full px-3 py-2 border rounded-lg bg-gray-100 cursor-not-allowed"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowPassword(prev => !prev)}
+                                                className="absolute right-2 top-2 text-gray-500"
+                                            >
+                                                {showPassword ? "Hide" : "Show"}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
+
                 </header>
 
                 {/* Tabs Content */}
@@ -679,13 +744,7 @@ const SellerDashboard = () => {
                                 {({ isSubmitting, setFieldValue }) => (
                                     <Form className="flex flex-col gap-4">
 
-                                        <div className="w-full flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                                            {/* Full Name */}
-                                            <AnimatedInput name="fullName" placeholder="Seller Full Name" />
 
-                                            {/* Email (read-only) */}
-                                            <AnimatedInput name="email" type="email" placeholder="Seller Email" readOnly />
-                                        </div>
 
                                         {/* Company Name */}
                                         <AnimatedInput name="companyName" placeholder="Company Name" />
@@ -754,23 +813,9 @@ const SellerDashboard = () => {
                                                     </Field>
                                                 </div>
                                             </div>
-                                            <div className="flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4">
-                                                {/* Min Revenue Field */}
-                                                <AnimatedInput name="minRevenue" type="number" placeholder="Min Revenue" prefix="$" />
-                                                {/* Max Revenue Field */}
-                                                <AnimatedInput name="maxRevenue" type="number" placeholder="Max Revenue" prefix="$" />
-                                            </div>
-                                            {/* Revenue errors */}
-                                            <ErrorMessage
-                                                name="minRevenue"
-                                                component="p"
-                                                className="text-red-500 text-sm mt-1"
-                                            />
-                                            <ErrorMessage
-                                                name="maxRevenue"
-                                                component="p"
-                                                className="text-red-500 text-sm mt-1"
-                                            />
+                                            <AnimatedInput name="annualRevenue" type="number" placeholder="Annual Revenue" prefix="$" />
+                                            <ErrorMessage name="annualRevenue" component="p" className="text-red-500 text-sm mt-1" />
+
                                         </div>
 
                                         {/* Industry & Geography filters */}
