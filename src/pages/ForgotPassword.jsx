@@ -7,8 +7,6 @@ const ForgotPassword = () => {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [disabled, setDisabled] = useState(false);
-  const [timer, setTimer] = useState(0);
 
   const navigate = useNavigate();
 
@@ -30,47 +28,18 @@ const ForgotPassword = () => {
     setLoading(true);
 
     try {
-      // Step 1: Check if email exists and is verified
-      const profileRes = await axios.get('https://advisor-seller-backend.vercel.app/api/auth/profile', {
-        validateStatus: () => true,
-      });
-
-      const profile = profileRes.data;
-
-      if (!profile || profile.email !== email) {
-        toast.error('Email does not exist ❌');
-        return;
-      }
-
-      if (!profile.isEmailVerified) {
-        toast.error('Email is not verified ❌');
-        return;
-      }
-
-      // Step 2: Send reset password link
+      // POST forgot-password request
       const res = await axios.post(
-        'https://advisor-seller-backend.vercel.app//api/auth/forgot-password',
+        'https://advisor-seller-backend.vercel.app/api/auth/forgot-password',
         { email },
         { validateStatus: () => true }
       );
 
-      if (res.status === 200) {
-        toast.success('Reset link sent to your email ✅');
+      if (res.status === 200 || res.status === 201) {
+        toast.success(res.data?.message || 'Reset link sent to your email ✅');
 
-        // Start 5-minute cooldown
-        setDisabled(true);
-        setTimer(5 * 60);
-
-        const countdown = setInterval(() => {
-          setTimer((prev) => {
-            if (prev <= 1) {
-              clearInterval(countdown);
-              setDisabled(false);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
+        // Redirect to /reset-password after 1.5s
+        setTimeout(() => navigate('/seller-login'), 1500);
       } else {
         toast.error(res.data?.message || 'Something went wrong ❌');
       }
@@ -97,23 +66,19 @@ const ForgotPassword = () => {
             placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={loading || disabled}
-            className={`w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 focus:ring-primary ${emailError ? 'border-red-500' : 'border-primary'}`}
+            disabled={loading}
+            className={`w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 focus:ring-primary ${emailError ? 'border-red-500' : 'border-primary'
+              }`}
           />
           {emailError && <span className="text-red-500 text-sm">{emailError}</span>}
 
           <button
             type="submit"
-            disabled={loading || disabled}
-            className={`w-full py-3 mt-2 rounded-xl text-white font-semibold ${
-              loading || disabled ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary/70 hover:bg-primary'
-            }`}
+            disabled={loading}
+            className={`w-full py-3 mt-2 rounded-xl text-white font-semibold ${loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-primary/70 hover:bg-primary'
+              }`}
           >
-            {loading
-              ? 'Checking...'
-              : disabled
-              ? `Wait ${Math.floor(timer / 60)}:${String(timer % 60).padStart(2, '0')}`
-              : 'Send Reset Link'}
+            {loading ? 'Sending...' : 'Send Reset Link'}
           </button>
         </form>
 
