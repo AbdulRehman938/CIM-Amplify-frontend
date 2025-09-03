@@ -80,7 +80,6 @@ const Auth = () => {
         if (!emailValidation && !passwordValidation) {
             setLoading(true);
             try {
-                // Login request (server should set HttpOnly cookie here)
                 const res = await axios.post(
                     "https://advisor-seller-backend.vercel.app/api/auth/login",
                     { email, password },
@@ -89,6 +88,15 @@ const Auth = () => {
 
                 if (res.status === 200 || res.status === 201) {
                     // ✅ Login succeeded
+
+                    // Store tokens and user data
+                    if (res.data) {
+                        const { access_token, refresh_token, user } = res.data;
+                        localStorage.setItem('access_token', access_token || '');
+                        localStorage.setItem('refresh_token', refresh_token || '');
+                        localStorage.setItem('user', JSON.stringify(user || {}));
+                    }
+
                     toast.success("Login successful ✅");
                     navigate("/seller-dashboard");
                 } else if (res.status === 401) {
@@ -104,6 +112,7 @@ const Auth = () => {
             }
         }
     };
+
 
 
 
